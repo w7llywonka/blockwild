@@ -3,12 +3,15 @@ export const BLOCKS = Object.freeze({
   AIR: 0, GRASS: 1, DIRT: 2, STONE: 3, WOOD: 4, LEAVES: 5,
   COAL: 6, IRON: 7, DIAMOND: 8, SAND: 9, WATER: 10,
   PLANKS: 11, WORKBENCH: 12, FURNACE: 13, TORCH: 14, BEDROCK: 15,
+  BED: 16, DOOR_BOTTOM: 17, DOOR_TOP: 18, DOOR_OPEN_BOTTOM: 19,
+  DOOR_OPEN_TOP: 20, CHEST: 21, FARMLAND: 22, WHEAT: 23,
+  WHEAT_RIPE: 24, BED_HEAD: 25, GLASS: 26,
 });
 
 export const ITEMS = Object.freeze({
   dirt: { name: 'Dirt', color: '#946340', block: BLOCKS.DIRT, kind: 'block' },
   grass: { name: 'Grass', color: '#76ac49', block: BLOCKS.GRASS, kind: 'block' },
-  stone: { name: 'Stone', color: '#92959c', block: BLOCKS.STONE, kind: 'block' },
+  stone: { name: 'Cobblestone', color: '#92959c', block: BLOCKS.STONE, kind: 'block' },
   wood: { name: 'Wood', color: '#98643c', block: BLOCKS.WOOD, kind: 'block' },
   leaves: { name: 'Leaves', color: '#538844', block: BLOCKS.LEAVES, kind: 'block' },
   sand: { name: 'Sand', color: '#d9c48c', block: BLOCKS.SAND, kind: 'block' },
@@ -16,22 +19,30 @@ export const ITEMS = Object.freeze({
   workbench: { name: 'Crafting table', color: '#b47a42', block: BLOCKS.WORKBENCH, kind: 'block' },
   furnace: { name: 'Furnace', color: '#797e87', block: BLOCKS.FURNACE, kind: 'block' },
   torch: { name: 'Torch', color: '#ffc963', block: BLOCKS.TORCH, kind: 'block' },
+  bed: { name: 'Bed', color: '#c83e38', block: BLOCKS.BED, kind: 'block' },
+  door: { name: 'Oak door', color: '#b88946', block: BLOCKS.DOOR_BOTTOM, kind: 'block' },
+  chest: { name: 'Chest', color: '#b77c36', block: BLOCKS.CHEST, kind: 'block' },
+  glass: { name: 'Glass', color: '#b8e7ee', block: BLOCKS.GLASS, kind: 'block' },
+  seeds: { name: 'Wheat seeds', color: '#7aab38', kind: 'seed' },
+  wheat: { name: 'Wheat', color: '#d6b752', kind: 'material' },
+  wool: { name: 'White wool', color: '#eee9db', kind: 'material' },
+  bread: { name: 'Bread', color: '#bf8139', kind: 'food', food: 5 },
   coal: { name: 'Coal', color: '#42434c', kind: 'material' },
   iron_ore: { name: 'Iron ore', color: '#b39783', kind: 'material' },
   iron_ingot: { name: 'Iron ingot', color: '#d7d7de', kind: 'material' },
   diamond: { name: 'Diamond', color: '#6ce0dd', kind: 'material' },
   stick: { name: 'Stick', color: '#ab7b4c', kind: 'material' },
-  apple: { name: 'Apple', color: '#e86155', kind: 'food', food: 5 },
+  apple: { name: 'Apple', color: '#e86155', kind: 'food', food: 4 },
   raw_mutton: { name: 'Raw mutton', color: '#c46b78', kind: 'food', food: 2 },
-  cooked_mutton: { name: 'Cooked mutton', color: '#bb7b48', kind: 'food', food: 8 },
-  wood_pickaxe: { name: 'Wood pickaxe', color: '#bc935d', kind: 'pickaxe', tier: 1 },
-  stone_pickaxe: { name: 'Stone pickaxe', color: '#a0a4ac', kind: 'pickaxe', tier: 2 },
-  iron_pickaxe: { name: 'Iron pickaxe', color: '#dce0e8', kind: 'pickaxe', tier: 3 },
-  diamond_pickaxe: { name: 'Diamond pickaxe', color: '#67dfd9', kind: 'pickaxe', tier: 4 },
-  wood_sword: { name: 'Wood sword', color: '#bc935d', kind: 'sword', tier: 1 },
-  stone_sword: { name: 'Stone sword', color: '#a0a4ac', kind: 'sword', tier: 2 },
-  iron_sword: { name: 'Iron sword', color: '#dce0e8', kind: 'sword', tier: 3 },
-  diamond_sword: { name: 'Diamond sword', color: '#67dfd9', kind: 'sword', tier: 4 },
+  cooked_mutton: { name: 'Cooked mutton', color: '#bb7b48', kind: 'food', food: 6 },
+  ...Object.fromEntries(['wood', 'stone', 'iron', 'diamond'].flatMap((material, i) => {
+    const kinds = ['pickaxe', 'sword', 'axe', 'hoe'];
+    return kinds.map(kind => [`${material}_${kind}`, {
+      name: `${material[0].toUpperCase()}${material.slice(1)} ${kind}`,
+      color: ['#bc935d', '#a0a4ac', '#dce0e8', '#67dfd9'][i],
+      kind, tier: i + 1, maxDurability: [59, 131, 250, 1561][i],
+    }]);
+  })),
 });
 
 export const RECIPES = [
@@ -39,6 +50,13 @@ export const RECIPES = [
   { id: 'stick', name: 'Sticks', output: ['stick', 4], cost: { planks: 2 }, category: 'tools' },
   { id: 'workbench', name: 'Crafting table', output: ['workbench', 1], cost: { planks: 4 }, category: 'building' },
   { id: 'torch', name: 'Torches', output: ['torch', 4], cost: { coal: 1, stick: 1 }, category: 'building' },
+  { id: 'bed', name: 'Bed', output: ['bed', 1], cost: { wool: 3, planks: 3 }, station: 'workbench', category: 'building' },
+  { id: 'door', name: 'Oak doors', output: ['door', 3], cost: { planks: 6 }, station: 'workbench', category: 'building' },
+  { id: 'chest', name: 'Chest', output: ['chest', 1], cost: { planks: 8 }, station: 'workbench', category: 'building' },
+  ...['wood', 'stone', 'iron', 'diamond'].flatMap(material => {
+    const item = { wood: 'planks', stone: 'stone', iron: 'iron_ingot', diamond: 'diamond' }[material];
+    return ['hoe', 'axe'].map(kind => ({ id: `${material}_${kind}`, name: ITEMS[`${material}_${kind}`].name, output: [`${material}_${kind}`, 1], cost: { [item]: kind === 'hoe' ? 2 : 3, stick: 2 }, station: 'workbench', category: 'tools' }));
+  }),
   ...['wood', 'stone', 'iron', 'diamond'].flatMap((material) => {
     const item = { wood: 'planks', stone: 'stone', iron: 'iron_ingot', diamond: 'diamond' }[material];
     return [
@@ -49,11 +67,15 @@ export const RECIPES = [
   { id: 'furnace', name: 'Furnace', output: ['furnace', 1], cost: { stone: 8 }, station: 'workbench', category: 'building' },
   { id: 'iron_ingot', name: 'Smelt iron', output: ['iron_ingot', 1], cost: { iron_ore: 1, coal: 1 }, station: 'furnace', category: 'tools' },
   { id: 'cooked_mutton', name: 'Cook mutton', output: ['cooked_mutton', 1], cost: { raw_mutton: 1, coal: 1 }, station: 'furnace', category: 'food' },
+  { id: 'bread', name: 'Bread', output: ['bread', 1], cost: { wheat: 3 }, station: 'workbench', category: 'food' },
+  { id: 'glass', name: 'Smelt glass', output: ['glass', 1], cost: { sand: 1, coal: 1 }, station: 'furnace', category: 'building' },
 ];
 
-const SOLID = new Set([1, 2, 3, 6, 7, 8, 9, 11, 12, 13, 15]);
-const DROPS = { 1: 'dirt', 2: 'dirt', 3: 'stone', 4: 'wood', 5: 'leaves', 6: 'coal', 7: 'iron_ore', 8: 'diamond', 9: 'sand', 11: 'planks', 12: 'workbench', 13: 'furnace', 14: 'torch' };
-const HARDNESS = { 1: .3, 2: .3, 3: .9, 4: .65, 5: .15, 6: 1.0, 7: 1.35, 8: 1.65, 9: .25, 11: .55, 12: .75, 13: 1.3, 14: .1 };
+const SOLID = new Set([1, 2, 3, 6, 7, 8, 9, 11, 12, 13, 15, 17, 18, 21, 22, 26]);
+const DROPS = { 1: 'dirt', 2: 'dirt', 3: 'stone', 4: 'wood', 5: 'leaves', 6: 'coal', 7: 'iron_ore', 8: 'diamond', 9: 'sand', 11: 'planks', 12: 'workbench', 13: 'furnace', 14: 'torch', 16: 'bed', 17: 'door', 18: 'door', 19: 'door', 20: 'door', 21: 'chest', 22: 'dirt', 23: 'seeds', 24: 'wheat', 25: 'bed' };
+const HARDNESS = { 1: .3, 2: .3, 3: .9, 4: .65, 5: .15, 6: 1.0, 7: 1.35, 8: 1.65, 9: .25, 11: .55, 12: .75, 13: 1.3, 14: .1, 16: .35, 17: .65, 18: .65, 19: .65, 20: .65, 21: .75, 22: .3, 23: .1, 24: .1, 25: .35, 26: .25 };
+const WOODEN_BLOCKS = new Set([4, 11, 12, 16, 17, 18, 19, 20, 21, 25]);
+const DOOR_BLOCKS = new Set([17, 18, 19, 20]);
 const TIERS = { 3: 1, 6: 1, 7: 2, 8: 3, 13: 1 };
 const HOTBAR = ['wood_pickaxe', 'dirt', 'wood', 'planks', 'torch', 'apple', 'stone', 'workbench', 'wood_sword'];
 const SAVE_VERSION = 1;
@@ -91,6 +113,13 @@ export class Game {
     this._seed = hashString(this.seed);
     this._randomState = this._seed || 1;
     this.inventory = Object.create(null);
+    this.durability = Object.create(null);
+    this.chests = Object.create(null);
+    this.furnaces = Object.create(null);
+    this.cropGrowth = Object.create(null);
+    this.drops = [];
+    this.spawnPoint = null;
+    this._cropClock = 0;
     this.hotbar = [...HOTBAR];
     this.selected = 0;
     this.time = .15;
@@ -111,8 +140,6 @@ export class Game {
     const spawn = this._spawnPoint();
     this.player = { ...spawn, w: .65, h: 1.8, vx: 0, vy: 0, facing: 1, grounded: false, health: 20, maxHealth: 20, hunger: 20, maxHunger: 20 };
     this._fallStart = this.player.y;
-    this.inventory.apple = 3;
-    this.inventory.torch = 8;
     if (this.mode === 'creative') for (const id of Object.keys(ITEMS)) this.inventory[id] = 999;
     for (const x of [135, 142, 171, 178, 195, 210]) this._spawnMob('sheep', x);
   }
@@ -172,6 +199,13 @@ export class Game {
   }
 
   _spawnPoint() {
+    if (this.spawnPoint && this.get(this.spawnPoint.x, this.spawnPoint.y) === BLOCKS.BED) {
+      const bed = this.spawnPoint;
+      for (const dx of [0, 1, -1, 2, -2, 3]) {
+        const point = { x: bed.x + dx + .18, y: bed.y + 1 - 1.81, w: .65, h: 1.8 };
+        if (!this._collides(point) && this.isSolid(point.x + .3, point.y + 1.82)) return { x: point.x, y: point.y };
+      }
+    }
     const x = 160;
     // Respawn in the open even if the player built over the original meadow.
     let y = this.surface[x] - 1.81;
@@ -187,7 +221,7 @@ export class Game {
   }
 
   set(x, y, id) {
-    if (!Number.isInteger(x) || !Number.isInteger(y) || !Number.isInteger(id) || id < 0 || id > 15 || x < 0 || y < 0 || x >= this.width || y >= this.height) return false;
+    if (!Number.isInteger(x) || !Number.isInteger(y) || !Number.isInteger(id) || id < 0 || id > 26 || x < 0 || y < 0 || x >= this.width || y >= this.height) return false;
     this.tiles[y * this.width + x] = id;
     return true;
   }
@@ -248,7 +282,7 @@ export class Game {
   _step(dt, input) {
     if (this.dead) return;
     const p = this.player;
-    this.time += dt / 240;
+    this.time += dt / 1200;
     if (this.time >= 1) { this.time %= 1; this.day++; }
     this._attackCooldown = Math.max(0, this._attackCooldown - dt);
     const submerged = this.get(p.x + p.w / 2, p.y + p.h * .6) === BLOCKS.WATER;
@@ -284,6 +318,29 @@ export class Game {
       }
     }
     this._stepMobs(dt);
+    for (const job of Object.values(this.furnaces)) {
+      if (!job.output) {
+        job.remaining = Math.max(0, job.remaining - dt);
+        if (job.remaining === 0) job.output = [...RECIPES.find(r => r.id === job.recipeId).output];
+      }
+    }
+    this.drops = this.drops.filter(drop => {
+      drop.age += dt;
+      if (drop.age >= 300) return false;
+      if (!this.dead && drop.age >= 2 && Math.hypot(drop.x - p.x - p.w / 2, drop.y - p.y - p.h / 2) < 1.3) {
+        const old = this.getDurability(drop.item);
+        this._add(drop.item, drop.count);
+        if (drop.durability !== undefined) this.durability[drop.item] = Math.min(old?.current ?? drop.durability, drop.durability);
+        this.message = `Picked up ${drop.count} ${ITEMS[drop.item].name}`;
+        return false;
+      }
+      return true;
+    });
+    this._cropClock += dt;
+    if (this._cropClock >= 1) {
+      this._growCrops(this._cropClock);
+      this._cropClock = 0;
+    }
     this._mobClock += dt;
     if (this._mobClock > 7) {
       this._mobClock = 0;
@@ -304,8 +361,18 @@ export class Game {
     this.player.health = Math.max(0, this.player.health - amount);
     if (this.player.health === 0) {
       this.dead = true;
+      for (const [item, count] of Object.entries(this.inventory)) {
+        if (count <= 0) continue;
+        const drop = { x: this.player.x + this.player.w / 2, y: this.player.y + this.player.h / 2, item, count, age: 0 };
+        const durability = this.getDurability(item);
+        if (durability) drop.durability = durability.current;
+        this.drops.push(drop);
+      }
+      this.inventory = Object.create(null);
+      // Stored tools keep their wear even when the player dies with empty pockets.
+      this.durability = Object.assign(Object.create(null), Object.fromEntries(Object.entries(this.durability).filter(([id]) => Object.values(this.chests).some(chest => chest[id] > 0))));
       this.cancelMining();
-      this.message = 'You fell. Respawn to return to the meadow — your inventory is safe.';
+      this.message = 'You died. Your items are where you fell. Recover them before they disappear.';
     }
   }
 
@@ -351,9 +418,80 @@ export class Game {
     return this.inventory[id] > 0 ? ITEMS[id] : null;
   }
 
-  _add(id, count = 1) { this.inventory[id] = (this.inventory[id] || 0) + count; }
+  getDurability(id) {
+    const item = ITEMS[id];
+    if (!item?.maxDurability || !(this.inventory[id] > 0)) return null;
+    return { current: this.durability[id] ?? item.maxDurability, max: item.maxDurability };
+  }
+
+  _wear(id, amount = 1) {
+    if (this.mode === 'creative' || !ITEMS[id]?.maxDurability || !(this.inventory[id] > 0)) return false;
+    this.durability[id] = (this.durability[id] ?? ITEMS[id].maxDurability) - amount;
+    if (this.durability[id] > 0) return false;
+    this.inventory[id]--;
+    if (this.inventory[id] > 0) this.durability[id] = ITEMS[id].maxDurability;
+    else delete this.durability[id];
+    return true;
+  }
+
+  _add(id, count = 1) {
+    if (this.durability[id] === undefined && ITEMS[id]?.maxDurability) this.durability[id] = ITEMS[id].maxDurability;
+    this.inventory[id] = (this.inventory[id] || 0) + count;
+  }
   _consume(id, count = 1) { if (this.mode !== 'creative') this.inventory[id] = Math.max(0, (this.inventory[id] || 0) - count); }
   _fail(message) { this.message = message; return { ok: false, message }; }
+
+  _growCrops(dt) {
+    for (const key of Object.keys(this.cropGrowth)) {
+      const [x, y] = key.split(',').map(Number);
+      if (this.get(x, y) !== BLOCKS.WHEAT) { delete this.cropGrowth[key]; continue; }
+      if (this.get(x, y + 1) !== BLOCKS.FARMLAND) {
+        this.set(x, y, BLOCKS.AIR);
+        this._add('seeds');
+        delete this.cropGrowth[key];
+        continue;
+      }
+      let hydrated = false;
+      for (let dx = -4; dx <= 4 && !hydrated; dx++) {
+        for (let dy = -2; dy <= 2; dy++) if (this.get(x + dx, y + 1 + dy) === BLOCKS.WATER) { hydrated = true; break; }
+      }
+      this.cropGrowth[key] = Math.min(180, this.cropGrowth[key] + dt * (hydrated ? 2 : 1));
+      if (this.cropGrowth[key] >= 180) { this.set(x, y, BLOCKS.WHEAT_RIPE); delete this.cropGrowth[key]; }
+    }
+  }
+
+  _removeBlock(x, y, block) {
+    if (DOOR_BLOCKS.has(block)) {
+      const otherY = y + ([BLOCKS.DOOR_TOP, BLOCKS.DOOR_OPEN_TOP].includes(block) ? 1 : -1);
+      if (DOOR_BLOCKS.has(this.get(x, otherY))) this.set(x, otherY, BLOCKS.AIR);
+    }
+    if (block === BLOCKS.BED || block === BLOCKS.BED_HEAD) {
+      const footX = x - (block === BLOCKS.BED_HEAD ? 1 : 0);
+      const otherX = block === BLOCKS.BED_HEAD ? x - 1 : x + 1;
+      if ([BLOCKS.BED, BLOCKS.BED_HEAD].includes(this.get(otherX, y))) this.set(otherX, y, BLOCKS.AIR);
+      if (this.spawnPoint?.x === footX && this.spawnPoint?.y === y) this.spawnPoint = null;
+    }
+    const key = `${x},${y}`;
+    if (block === BLOCKS.CHEST) {
+      for (const [id, n] of Object.entries(this.chests[key] || {})) this._add(id, n);
+      delete this.chests[key];
+    }
+    if (block === BLOCKS.FURNACE && this.furnaces[key]) {
+      const job = this.furnaces[key];
+      if (job.output) this._add(...job.output);
+      else for (const [id, count] of Object.entries(RECIPES.find(r => r.id === job.recipeId).cost)) this._add(id, count);
+      delete this.furnaces[key];
+    }
+    if (block === BLOCKS.WHEAT_RIPE) this._add('seeds', 2);
+    if (block === BLOCKS.GRASS && this._random() < .35) this._add('seeds');
+    delete this.cropGrowth[key];
+    if (block === BLOCKS.FARMLAND && [BLOCKS.WHEAT, BLOCKS.WHEAT_RIPE].includes(this.get(x, y - 1))) {
+      const crop = this.get(x, y - 1);
+      this._removeBlock(x, y - 1, crop);
+      this._add(DROPS[crop]);
+    }
+    this.set(x, y, BLOCKS.AIR);
+  }
 
   mine(x, y, dt = .0167) {
     if (this.dead) return this._fail('Respawn to keep exploring.');
@@ -369,17 +507,18 @@ export class Game {
       return this._fail(`${TIERS[block] === 3 ? 'An iron' : TIERS[block] === 2 ? 'A stone' : 'A wood'} pickaxe or better is needed.`);
     }
     if (!this.mining || this.mining.x !== x || this.mining.y !== y) this.mining = { x, y, progress: 0 };
-    const speed = tier ? 1 + tier * .35 : 1;
+    const speed = held?.kind === 'axe' && WOODEN_BLOCKS.has(block) ? 2 + held.tier : tier && TIERS[block] ? 1 + tier * .35 : 1;
     this.mining.progress += this.mode === 'creative' ? 1 : Math.min(dt, .25) * speed / (HARDNESS[block] || 1);
     if (this.mining.progress < 1) return { ok: true, broken: false };
-    this.set(x, y, BLOCKS.AIR);
-    const item = DROPS[block];
+    this._removeBlock(x, y, block);
+    const item = block === BLOCKS.GLASS && this.mode === 'creative' ? 'glass' : DROPS[block];
     if (item) this._add(item);
     if (block === BLOCKS.LEAVES && this._random() < .18) this._add('apple');
     this.stats.mined++;
+    const toolBroke = held?.maxDurability && held.kind !== 'hoe' && this._wear(this.hotbar[this.selected], held.kind === 'sword' ? 2 : 1);
     this.cancelMining();
-    this.message = item ? `+1 ${ITEMS[item].name}` : '';
-    return { ok: true, broken: true, item };
+    this.message = `${item ? `+1 ${ITEMS[item].name}` : 'Block broken'}${toolBroke ? ` · ${held.name} broke!` : ''}`;
+    return { ok: true, broken: true, item, toolBroke: !!toolBroke };
   }
 
   cancelMining() { this.mining = null; }
@@ -391,14 +530,111 @@ export class Game {
     if (x < 0 || y < 0 || x >= this.width || y >= this.height || !this._inRange(x, y)) return this._fail('Move a little closer.');
     const id = this.hotbar[this.selected], item = this._held();
     if (!item || item.block === undefined) return this._fail('Select a block in your hotbar to build.');
-    if (![BLOCKS.AIR, BLOCKS.WATER].includes(this.get(x, y))) return this._fail('That space is already occupied.');
-    if (overlaps(this.player, { x, y, w: 1, h: 1 })) return this._fail('Leave some room for yourself.');
-    if (SOLID.has(item.block) && this.mobs.some(m => overlaps(m, { x, y, w: 1, h: 1 }))) return this._fail('There is a creature in the way.');
-    this.set(x, y, item.block);
+    const cells = [{ x, y, block: item.block }];
+    if (item.block === BLOCKS.BED) cells.push({ x: x + 1, y, block: BLOCKS.BED_HEAD });
+    if (item.block === BLOCKS.DOOR_BOTTOM) cells.push({ x, y: y - 1, block: BLOCKS.DOOR_TOP });
+    for (const cell of cells) {
+      if (cell.x < 0 || cell.x >= this.width || cell.y < 0 || cell.y >= this.height || !this._inRange(cell.x, cell.y)) return this._fail('Move closer to leave room for the whole block.');
+      if (![BLOCKS.AIR, BLOCKS.WATER].includes(this.get(cell.x, cell.y))) return this._fail('That space is already occupied.');
+      if (overlaps(this.player, { ...cell, w: 1, h: 1 })) return this._fail('Leave some room for yourself.');
+      if (SOLID.has(cell.block) && this.mobs.some(m => overlaps(m, { ...cell, w: 1, h: 1 }))) return this._fail('There is a creature in the way.');
+    }
+    if ((item.block === BLOCKS.BED && !cells.every(cell => this.isSolid(cell.x, y + 1))) || (item.block === BLOCKS.DOOR_BOTTOM && !this.isSolid(x, y + 1))) return this._fail('Place this on solid ground.');
+    for (const cell of cells) this.set(cell.x, cell.y, cell.block);
+    if (item.block === BLOCKS.CHEST) this.chests[`${x},${y}`] = Object.create(null);
     this._consume(id);
     this.stats.placed++;
     this.message = `${item.name} placed`;
     return { ok: true };
+  }
+
+  interact(x, y) {
+    if (this.dead) return this._fail('Respawn to keep exploring.');
+    if (!finite(x) || !finite(y)) return this._fail('Invalid interaction target.');
+    x = Math.floor(x); y = Math.floor(y);
+    if (!this._inRange(x, y)) return this._fail('Move a little closer.');
+    const block = this.get(x, y), held = this._held();
+    if (DOOR_BLOCKS.has(block)) {
+      const bottomY = y + ([BLOCKS.DOOR_TOP, BLOCKS.DOOR_OPEN_TOP].includes(block) ? 1 : 0);
+      const open = [BLOCKS.DOOR_OPEN_BOTTOM, BLOCKS.DOOR_OPEN_TOP].includes(block);
+      if (!DOOR_BLOCKS.has(this.get(x, bottomY - 1)) || !DOOR_BLOCKS.has(this.get(x, bottomY))) return this._fail('This door is incomplete.');
+      if (open && [this.player, ...this.mobs].some(body => overlaps(body, { x, y: bottomY - 1, w: 1, h: 2 }))) return this._fail('There is someone in the doorway.');
+      this.set(x, bottomY, open ? BLOCKS.DOOR_BOTTOM : BLOCKS.DOOR_OPEN_BOTTOM);
+      this.set(x, bottomY - 1, open ? BLOCKS.DOOR_TOP : BLOCKS.DOOR_OPEN_TOP);
+      this.message = open ? 'Door closed' : 'Door opened';
+      return { ok: true, action: 'door', message: this.message };
+    }
+    if (block === BLOCKS.BED || block === BLOCKS.BED_HEAD) {
+      this.spawnPoint = { x: x - (block === BLOCKS.BED_HEAD ? 1 : 0), y };
+      if (this.time <= .54 || this.time >= .96) return this._fail('Respawn point set. You can sleep at night.');
+      if (this.mobs.some(m => m.type === 'zombie' && Math.hypot(m.x - x, m.y - y) < 8)) return this._fail('Respawn point set. Monsters are too close to sleep.');
+      this.time = .03;
+      this.day++;
+      this.message = 'Good morning! Respawn point set.';
+      return { ok: true, action: 'sleep', message: this.message };
+    }
+    if (block === BLOCKS.CHEST) {
+      this.chests[`${x},${y}`] ||= Object.create(null);
+      return { ok: true, action: 'chest', x, y };
+    }
+    if (block === BLOCKS.WORKBENCH) return { ok: true, action: 'crafting', x, y };
+    if (block === BLOCKS.FURNACE) return { ok: true, action: 'furnace', x, y };
+    if (held?.kind === 'hoe' && [BLOCKS.GRASS, BLOCKS.DIRT].includes(block)) {
+      if (this.get(x, y - 1) !== BLOCKS.AIR) return this._fail('Clear the space above the soil first.');
+      this.set(x, y, BLOCKS.FARMLAND);
+      const broke = this._wear(this.hotbar[this.selected]);
+      this.message = `Soil tilled. Plant wheat seeds here.${broke ? ` ${held.name} broke!` : ''}`;
+      return { ok: true, action: 'till', message: this.message };
+    }
+    if (held?.kind === 'seed') {
+      const soilY = block === BLOCKS.FARMLAND ? y : y + 1;
+      if (this.get(x, soilY) !== BLOCKS.FARMLAND || this.get(x, soilY - 1) !== BLOCKS.AIR) return this._fail('Plant seeds on empty tilled soil.');
+      this.set(x, soilY - 1, BLOCKS.WHEAT);
+      this.cropGrowth[`${x},${soilY - 1}`] = 0;
+      this._consume('seeds');
+      this.message = 'Wheat planted. Nearby water helps it grow faster.';
+      return { ok: true, action: 'plant', message: this.message };
+    }
+    return this._fail('Use a crafting table, furnace, chest, door, bed, hoe, or seeds here.');
+  }
+
+  transferChest(x, y, itemId, count = 1, direction = 'deposit') {
+    if (this.dead || !Number.isInteger(x) || !Number.isInteger(y) || !this._inRange(x, y) || this.get(x, y) !== BLOCKS.CHEST) return this._fail('Move closer to a chest.');
+    if (!knownItem(itemId) || !Number.isInteger(count) || count <= 0 || count > 1000000 || !['deposit', 'withdraw'].includes(direction)) return this._fail('Invalid chest transfer.');
+    const chest = this.chests[`${x},${y}`] ||= Object.create(null);
+    const from = direction === 'deposit' ? this.inventory : chest;
+    const to = direction === 'deposit' ? chest : this.inventory;
+    if ((from[itemId] || 0) < count) return this._fail('There are not enough items to transfer.');
+    if ((to[itemId] || 0) + count > 1000000) return this._fail('That stack is full.');
+    from[itemId] -= count;
+    if (direction === 'withdraw') this._add(itemId, count);
+    else to[itemId] = (to[itemId] || 0) + count;
+    this.message = `${direction === 'deposit' ? 'Stored' : 'Took'} ${count} ${ITEMS[itemId].name}`;
+    return { ok: true, message: this.message };
+  }
+
+  startSmelt(x, y, recipeId) {
+    if (this.dead || !Number.isInteger(x) || !Number.isInteger(y) || !this._inRange(x, y) || this.get(x, y) !== BLOCKS.FURNACE) return this._fail('Move closer to a furnace.');
+    const recipe = RECIPES.find(r => r.id === recipeId && r.station === 'furnace');
+    if (!recipe) return this._fail('This item cannot be smelted.');
+    const key = `${x},${y}`;
+    if (this.furnaces[key]) return this._fail(this.furnaces[key].output ? 'Collect the finished item first.' : 'This furnace is already burning.');
+    if (this.mode !== 'creative' && Object.entries(recipe.cost).some(([id, n]) => (this.inventory[id] || 0) < n)) return this._fail('Gather the ingredients and coal first.');
+    for (const [id, n] of Object.entries(recipe.cost)) this._consume(id, n);
+    this.furnaces[key] = { recipeId, remaining: 10, output: null };
+    this.message = 'Furnace lit. Ready in 10 seconds.';
+    return { ok: true, message: this.message };
+  }
+
+  collectFurnace(x, y) {
+    if (this.dead || !Number.isInteger(x) || !Number.isInteger(y) || !this._inRange(x, y) || this.get(x, y) !== BLOCKS.FURNACE) return this._fail('Move closer to a furnace.');
+    const job = this.furnaces[`${x},${y}`];
+    if (!job?.output) return this._fail(job ? 'The furnace is still burning.' : 'The furnace is empty.');
+    this._add(...job.output);
+    this.stats.crafted++;
+    this.message = `Collected ${job.output[1]} ${ITEMS[job.output[0]].name}`;
+    delete this.furnaces[`${x},${y}`];
+    return { ok: true, message: this.message };
   }
 
   attack(x, y) {
@@ -407,20 +643,22 @@ export class Game {
     const mob = this.mobs.find(m => x >= m.x - .25 && x <= m.x + m.w + .25 && y >= m.y - .25 && y <= m.y + m.h + .25 && Math.hypot(m.x + m.w / 2 - p.x - p.w / 2, m.y + m.h / 2 - p.y - p.h / 2) <= 3.1);
     if (!mob) return { ok: false };
     const held = this._held();
-    const damage = this.mode === 'creative' ? 100 : held?.kind === 'sword' ? 2 + held.tier * 2 : held?.kind === 'pickaxe' ? 2 : 1;
+    const damage = this.mode === 'creative' ? 100 : held?.kind === 'sword' ? 2 + held.tier * 2 : held?.kind === 'axe' ? 3 + held.tier : held?.kind === 'pickaxe' ? 2 : 1;
     mob.health -= damage;
     mob.facing = Math.sign(mob.x - p.x) || 1;
     mob.vx = mob.facing * 4;
     mob.vy = -3;
     mob.timer = 1;
     this._attackCooldown = .35;
+    const toolBroke = held?.maxDurability && this._wear(this.hotbar[this.selected], held.kind === 'sword' ? 1 : 2);
     this.message = `${held?.kind === 'sword' ? 'Hit' : 'Bonk'}!`;
     if (mob.health <= 0) {
       this.mobs = this.mobs.filter(m => m.id !== mob.id);
       this.stats.kills++;
-      if (mob.type === 'sheep') { this._add('raw_mutton', 2); this.message = '+2 Raw mutton'; }
+      if (mob.type === 'sheep') { this._add('raw_mutton', 2); this._add('wool', 1); this.message = '+2 Raw mutton · +1 Wool'; }
       else { this._add('coal', 1); this.message = '+1 Coal'; }
     }
+    if (toolBroke) this.message += ` · ${held.name} broke!`;
     return { ok: true, message: this.message };
   }
 
@@ -453,9 +691,9 @@ export class Game {
     const id = station === 'workbench' ? BLOCKS.WORKBENCH : station === 'furnace' ? BLOCKS.FURNACE : null;
     if (id === null) return false;
     const p = this.player, cx = p.x + p.w / 2, cy = p.y + p.h / 2;
-    for (let y = Math.floor(cy - 4); y <= Math.ceil(cy + 4); y++) {
-      for (let x = Math.floor(cx - 4); x <= Math.ceil(cx + 4); x++) {
-        if (this.get(x, y) === id && Math.hypot(x + .5 - cx, y + .5 - cy) <= 4.5) return true;
+    for (let y = Math.floor(cy - 5); y <= Math.ceil(cy + 5); y++) {
+      for (let x = Math.floor(cx - 5); x <= Math.ceil(cx + 5); x++) {
+        if (this.get(x, y) === id && Math.hypot(x + .5 - cx, y + .5 - cy) <= 5) return true;
       }
     }
     return false;
@@ -492,7 +730,7 @@ export class Game {
     this._jumpLatch = false;
     this.cancelMining();
     this.mobs = this.mobs.filter(m => m.type !== 'zombie' || Math.abs(m.x - spawn.x) > 12);
-    this.message = 'A fresh start. Your inventory is safe.';
+    this.message = 'A fresh start. Recover your dropped items before they disappear.';
   }
 
   serialize() {
@@ -502,6 +740,11 @@ export class Game {
       inventory: { ...this.inventory }, hotbar: [...this.hotbar], selected: this.selected,
       time: this.time, day: this.day, mobs: this.mobs.map(m => ({ ...m })),
       stats: { ...this.stats }, dead: this.dead, randomState: this._randomState,
+      durability: { ...this.durability },
+      chests: Object.fromEntries(Object.entries(this.chests).map(([key, items]) => [key, { ...items }])),
+      furnaces: Object.fromEntries(Object.entries(this.furnaces).map(([key, job]) => [key, { ...job, output: job.output ? [...job.output] : null }])),
+      cropGrowth: { ...this.cropGrowth }, spawnPoint: this.spawnPoint ? { ...this.spawnPoint } : null,
+      drops: this.drops.map(drop => ({ ...drop })),
     };
   }
 
@@ -513,7 +756,7 @@ export class Game {
     const fail = () => { throw new Error('This world save is invalid or uses an unsupported version.'); };
     if (!data || typeof data !== 'object' || data.version !== SAVE_VERSION || data.width !== 320 || data.height !== 100) fail();
     if (typeof data.seed !== 'string' || data.seed.length > 80 || !['survival', 'creative'].includes(data.mode)) fail();
-    if (!Array.isArray(data.tiles) || data.tiles.length !== 32000 || !data.tiles.every(n => Number.isInteger(n) && n >= 0 && n <= 15)) fail();
+    if (!Array.isArray(data.tiles) || data.tiles.length !== 32000 || !data.tiles.every(n => Number.isInteger(n) && n >= 0 && n <= 26)) fail();
     if (!Array.isArray(data.surface) || data.surface.length !== 320 || !data.surface.every(n => Number.isInteger(n) && n > 0 && n < 100)) fail();
     const p = data.player;
     if (!p || !['x', 'y', 'vx', 'vy', 'health', 'hunger'].every(key => finite(p[key]))) fail();
@@ -523,6 +766,24 @@ export class Game {
     if (!finite(data.time) || data.time < 0 || data.time >= 1 || !Number.isInteger(data.day) || data.day < 1 || data.day > 1000000 || typeof data.dead !== 'boolean') fail();
     if (!data.stats || !['mined', 'placed', 'crafted', 'kills'].every(k => Number.isInteger(data.stats[k]) && data.stats[k] >= 0 && data.stats[k] < 100000000)) fail();
     if (!Array.isArray(data.mobs) || data.mobs.length > 100 || data.mobs.some(m => !m || !['sheep', 'zombie'].includes(m.type) || !Number.isInteger(m.id) || m.id < 1 || !['x', 'y', 'vx', 'vy', 'health'].every(k => finite(m[k])) || m.x < 0 || m.x > 320 || m.y < -100 || m.y > 100 || m.health <= 0 || m.health > 20 || Math.abs(m.vx) > 50 || Math.abs(m.vy) > 50)) fail();
+    const record = value => value && typeof value === 'object' && !Array.isArray(value);
+    const validKey = key => {
+      if (!/^(0|[1-9]\d{0,2}),(0|[1-9]\d?)$/.test(key)) return false;
+      const [x, y] = key.split(',').map(Number);
+      return x < 320 && y < 100;
+    };
+    const savedBlock = key => { const [x, y] = key.split(',').map(Number); return data.tiles[y * 320 + x]; };
+    const validItems = value => record(value) && Object.entries(value).every(([id, n]) => knownItem(id) && Number.isInteger(n) && n >= 0 && n <= 1000000);
+    if (data.durability !== undefined && (!record(data.durability) || Object.entries(data.durability).some(([id, n]) => !knownItem(id) || !ITEMS[id].maxDurability || !Number.isInteger(n) || n < 1 || n > ITEMS[id].maxDurability))) fail();
+    if (data.chests !== undefined && (!record(data.chests) || Object.entries(data.chests).some(([key, items]) => !validKey(key) || savedBlock(key) !== BLOCKS.CHEST || !validItems(items)))) fail();
+    if (data.cropGrowth !== undefined && (!record(data.cropGrowth) || Object.entries(data.cropGrowth).some(([key, seconds]) => !validKey(key) || savedBlock(key) !== BLOCKS.WHEAT || !finite(seconds) || seconds < 0 || seconds > 180))) fail();
+    if (data.spawnPoint !== undefined && data.spawnPoint !== null && (!record(data.spawnPoint) || !validKey(`${data.spawnPoint.x},${data.spawnPoint.y}`) || savedBlock(`${data.spawnPoint.x},${data.spawnPoint.y}`) !== BLOCKS.BED)) fail();
+    if (data.furnaces !== undefined && (!record(data.furnaces) || Object.entries(data.furnaces).some(([key, job]) => {
+      if (!validKey(key) || savedBlock(key) !== BLOCKS.FURNACE || !record(job) || !finite(job.remaining) || job.remaining < 0 || job.remaining > 10) return true;
+      const recipe = RECIPES.find(r => r.id === job.recipeId && r.station === 'furnace');
+      return !recipe || (job.output !== null && (!Array.isArray(job.output) || job.output.length !== 2 || job.output[0] !== recipe.output[0] || job.output[1] !== recipe.output[1] || job.remaining !== 0));
+    }))) fail();
+    if (data.drops !== undefined && (!Array.isArray(data.drops) || data.drops.length > 1000 || data.drops.some(drop => !record(drop) || !knownItem(drop.item) || !Number.isInteger(drop.count) || drop.count < 1 || drop.count > 1000000 || !finite(drop.x) || drop.x < 0 || drop.x > 320 || !finite(drop.y) || drop.y < -100 || drop.y > 102 || !finite(drop.age) || drop.age < 0 || drop.age > 300 || (drop.durability !== undefined && (!ITEMS[drop.item].maxDurability || !Number.isInteger(drop.durability) || drop.durability < 1 || drop.durability > ITEMS[drop.item].maxDurability))))) fail();
     const game = new Game({ seed: data.seed, mode: data.mode });
     game.tiles = Uint8Array.from(data.tiles);
     game.surface = [...data.surface];
@@ -537,6 +798,12 @@ export class Game {
     game.mobs = data.mobs.map(m => ({ id: m.id, type: m.type, x: m.x, y: m.y, vx: m.vx, vy: m.vy, health: m.health, w: m.type === 'sheep' ? 1.15 : .65, h: m.type === 'sheep' ? .95 : 1.75, facing: m.facing === -1 ? -1 : 1, grounded: !!m.grounded, timer: clamp(finite(m.timer) ? m.timer : 0, 0, 10), attackClock: clamp(finite(m.attackClock) ? m.attackClock : 0, 0, 2) }));
     game._nextMobId = Math.max(0, ...game.mobs.map(m => m.id)) + 1;
     game._randomState = Number.isInteger(data.randomState) ? data.randomState >>> 0 || 1 : game._randomState;
+    game.durability = Object.assign(Object.create(null), data.durability || {});
+    game.chests = Object.assign(Object.create(null), Object.fromEntries(Object.entries(data.chests || {}).map(([key, items]) => [key, Object.assign(Object.create(null), items)])));
+    game.furnaces = Object.assign(Object.create(null), Object.fromEntries(Object.entries(data.furnaces || {}).map(([key, job]) => [key, { recipeId: job.recipeId, remaining: job.remaining, output: job.output ? [...job.output] : null }])));
+    game.cropGrowth = Object.assign(Object.create(null), data.cropGrowth || {});
+    game.spawnPoint = data.spawnPoint ? { x: data.spawnPoint.x, y: data.spawnPoint.y } : null;
+    game.drops = (data.drops || []).map(drop => ({ x: drop.x, y: drop.y, item: drop.item, count: drop.count, age: drop.age, ...(drop.durability === undefined ? {} : { durability: drop.durability }) }));
     game._fallStart = game.player.y;
     // A modified save or collapsed world should never trap the player in a solid tile.
     if (game._collides(game.player)) Object.assign(game.player, game._spawnPoint(), { vx: 0, vy: 0, grounded: false });

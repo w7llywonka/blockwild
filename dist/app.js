@@ -1,5 +1,6 @@
 import { Game, ITEMS, RECIPES, BLOCKS } from './engine.js';
 import { Renderer, drawItem } from './renderer.js';
+import { recipeForGrid, fillRecipeGrid } from './crafting.js';
 
 const $ = (s) => document.querySelector(s);
 const $$ = (s) => [...document.querySelectorAll(s)];
@@ -15,6 +16,11 @@ let touchBuild = false;
 let soundEnabled = false;
 let audioContext;
 let category = 'all';
+let craftingGrid = Array(4).fill(null);
+let craftIngredient = null;
+let activeChest = null;
+let activeFurnace = null;
+let lastFurnaceUi = '';
 let lastUi = '';
 let lastToast = '';
 let lastToastTime = 0;
@@ -68,7 +74,9 @@ function closeModal(dialog) { dialog.close(); clearInput(); focusGame(); }
 function openModal(id) {
   clearInput();
   for (const modal of $$('.modal[open]')) modal.close();
-  if (id === 'inventory-modal') renderInventory();
+  if (id === 'inventory-modal') { craftingGrid = Array(gridSize() ** 2).fill(null); renderInventory(); }
+  if (id === 'chest-modal') renderChest();
+  if (id === 'furnace-modal') { lastFurnaceUi = ''; renderFurnace(); }
   if (id === 'pause-modal') {
     $('#world-summary').textContent = `${game.mode === 'creative' ? 'Creative' : 'Survival'} · Day ${game.day} · Seed: ${game.seed}\n${game.stats.mined} blocks mined · ${game.stats.placed} blocks placed`;
     $('#reset-confirm').hidden = true;
@@ -88,6 +96,7 @@ function startGame(nextGame, flags = null) {
   $('#intro').hidden = true; $('#game-ui').hidden = false; $('#death-screen').hidden = game.dead;
   for (const modal of $$('.modal[open]')) modal.close();
   if ('resetCamera' in renderer) renderer.resetCamera();
+  craftingGrid = Array(4).fill(null); craftIngredient = null; activeChest = null; activeFurnace = null;
   lastUi = ''; saveClock = 0;
   $('#footer-state').textContent = `Seed: ${game.seed} · Your own corner of the world.`;
   $('#mode-label').textContent = game.mode.toUpperCase();
@@ -167,7 +176,7 @@ $('#reset-world-button').addEventListener('click', () => {
   $('#footer-state').textContent = 'Your adventure starts here.';
   $('#seed-input').focus();
 });
-$('#respawn-button').addEventListener('click', () => { game.respawn(); $('#death-screen').hidden = true; clearInput(); updateUi(true); focusGame(); toast('A fresh start. Your inventory is safe.', true); });
+$('#respawn-button').addEventListener('click', () => { game.respawn(); $('#death-screen').hidden = true; clearInput(); updateUi(true); focusGame(); toast('Your dropped items are waiting where you fell.', true); });
 
 function makeIcon(id, size = 32) {
   const icon = document.createElement('canvas'); icon.width = size * 2; icon.height = size * 2;
@@ -187,7 +196,7 @@ function renderHotbar() {
     button.setAttribute('aria-label', button.title); button.setAttribute('aria-pressed', String(index === game.selected));
     const number = document.createElement('span'); number.className = 'slot-key'; number.textContent = index + 1;
     const count = document.createElement('span'); count.className = 'slot-count'; count.textContent = game.inventory[id] ? game.mode === 'creative' ? '∞' : game.inventory[id] : '';
-    button.append(number, makeIcon(id), count);
+    button.append(number, makeIcon(id), count); addDurability(button, id);
     button.addEventListener('click', () => { game.select(index); game.cancelMining(); updateUi(true); focusGame(); sound(); });
     bar.append(button);
   });
@@ -195,17 +204,17 @@ function renderHotbar() {
 function updateUi(force = false) {
   if (!playing) return;
   const p = game.player, selectedId = game.hotbar[game.selected], selected = ITEMS[selectedId];
-  const key = JSON.stringify([game.inventory, game.selected, game.hotbar, Math.ceil(p.health), Math.ceil(p.hunger), game.dead]);
+  const key = JSON.stringify([game.inventory, game.selected, game.hotbar, game.durability, Math.ceil(p.health), Math.ceil(p.hunger), game.dead]);
   if (force || key !== lastUi) {
     lastUi = key; renderHotbar();
-    $('#hearts').innerHTML = Array.from({ length: 10 }, (_, i) => `<span class="${p.health <= i * 2 ? 'vital-off' : p.health < i * 2 + 2 ? 'vital-half' : ''}" aria-hidden="true">♥</span>`).join('');
+    $('#hearts').innerHTML = Array.from({ length: 10 }, (_, i) => `<span class="${p.health <= i * 2 ? 'vital-off' : p.health < i * 2 + 2 ? 'vital-half' : ''}" aria-hidden="true"><svg viewBox="0 0 10 10"><path fill="#280a0a" d="M1 0h3v1h2V0h3v1h1v4H9v1H8v1H7v1H6v1H4V8H3V7H2V6H1V5H0V1h1Z"/><path fill="currentColor" d="M1 1h3v1h2V1h3v4H8v1H7v1H6v1H4V7H3V6H2V5H1Z"/><path fill="#ff9292" d="M2 1h2v1H2Z"/></svg></span>`).join('');
     $('#hearts').setAttribute('aria-label', `Health ${Math.ceil(p.health)} of 20`);
-    $('#hunger').innerHTML = Array.from({ length: 10 }, (_, i) => `<span class="${p.hunger <= i * 2 ? 'vital-off' : p.hunger < i * 2 + 2 ? 'vital-half' : ''}" aria-hidden="true">◆</span>`).join('');
+    $('#hunger').innerHTML = Array.from({ length: 10 }, (_, i) => `<span class="${p.hunger <= i * 2 ? 'vital-off' : p.hunger < i * 2 + 2 ? 'vital-half' : ''}" aria-hidden="true"><svg viewBox="0 0 12 12"><path fill="#2a1b12" d="M5 0h4v1h2v2h1v4h-2v2H8V8H7l-2 3H1v-1H0V7h3l2-2V3H4V1h1Z"/><path fill="#ded7b9" d="M1 8h2l3-3 2 2-3 3H2V9H1Z"/><path fill="currentColor" d="M6 1h3v1h2v4H9v2H7V7H6V5H5V2h1Z"/><path fill="#e6b079" d="M6 2h3v1H6Z"/></svg></span>`).join('');
     $('#hunger').setAttribute('aria-label', `Hunger ${Math.ceil(p.hunger)} of 20`);
     $('#selected-name').textContent = game.inventory[selectedId] ? selected?.name || 'Empty hands' : 'Empty hands';
-    $('#item-hint').textContent = !game.inventory[selectedId] ? 'Hold to gather' : selected.kind === 'food' ? 'Q to eat' : selected.kind === 'sword' ? 'Click to attack' : selected.kind === 'pickaxe' ? 'Hold to mine' : 'Right-click to place';
+    $('#item-hint').textContent = !game.inventory[selectedId] ? 'Hold to gather' : selected.kind === 'food' ? 'Q to eat' : selected.kind === 'sword' ? 'Click to attack' : selected.kind === 'pickaxe' || selected.kind === 'axe' ? 'Hold to mine' : selected.kind === 'hoe' ? 'Right-click to till soil' : selected.kind === 'seed' ? 'Right-click tilled soil' : 'Right-click to place';
     $('#death-screen').hidden = !game.dead;
-    if (game.dead) clearInput();
+    if (game.dead) { clearInput(); for (const modal of $$('.modal[open]')) modal.close(); }
   }
   $('#day-label').textContent = `Day ${game.day}`;
   const t = game.time;
@@ -221,21 +230,60 @@ function updateUi(force = false) {
   for (const li of $$('#quest-list li')) { const done = !!questFlags[li.dataset.quest]; li.classList.toggle('done', done); li.querySelector('span').textContent = done ? '✓' : ''; }
   $('#quest-progress').textContent = `${Object.values(questFlags).filter(Boolean).length} / 4 COMPLETE`;
 }
+function gridSize() { return game.mode === 'creative' || game.nearStation('workbench') ? 3 : 2; }
+function clearCraftingGrid() { craftingGrid = Array(gridSize() ** 2).fill(null); renderCraftGrid(); }
+function renderCraftGrid() {
+  const size = gridSize();
+  if (craftingGrid.length !== size * size) craftingGrid = Array(size * size).fill(null);
+  $('#crafting-title').textContent = `Crafting · ${size} × ${size}`;
+  const grid = $('#crafting-grid'); grid.dataset.size = size; grid.replaceChildren();
+  craftingGrid.forEach((id, i) => {
+    const button = document.createElement('button'); button.className = 'craft-cell'; button.dataset.cell = i;
+    button.setAttribute('aria-label', `Crafting slot ${i + 1}${id ? `: ${ITEMS[id].name}` : ': empty'}`);
+    if (id) button.append(makeIcon(id));
+    button.addEventListener('click', () => {
+      if (!craftIngredient || !game.inventory[craftIngredient]) { craftingGrid[i] = null; renderCraftGrid(); return; }
+      const needed = craftingGrid.filter((v, index) => index !== i && v === craftIngredient).length + 1;
+      if (game.mode !== 'creative' && needed > (game.inventory[craftIngredient] || 0)) { toast(`You need more ${ITEMS[craftIngredient].name.toLowerCase()}.`); return; }
+      craftingGrid[i] = craftIngredient; renderCraftGrid(); sound();
+    });
+    button.addEventListener('contextmenu', e => { e.preventDefault(); craftingGrid[i] = null; renderCraftGrid(); });
+    grid.append(button);
+  });
+  const recipe = recipeForGrid(craftingGrid, size), output = $('#craft-output'); output.replaceChildren();
+  output.disabled = !recipe || !game.canCraft(recipe.id);
+  output.setAttribute('aria-label', recipe ? `Take ${recipe.output[1]} ${recipe.name}` : 'No crafting result');
+  if (recipe) {
+    output.append(makeIcon(recipe.output[0]));
+    const count = document.createElement('span'); count.className = 'cell-count'; count.textContent = recipe.output[1]; output.append(count);
+  }
+  $('#grid-message').textContent = recipe ? game.canCraft(recipe.id) ? `${recipe.name} ×${recipe.output[1]} — click the result to craft.` : 'You do not have enough ingredients.' : craftingGrid.some(Boolean) ? 'This arrangement does not make an item.' : size === 2 ? 'Select an ingredient and place it, or fill a recipe. Place a table for 3 × 3.' : 'Select an ingredient and place it, or fill a recipe from the book.';
+  $('#craft-selection').textContent = craftIngredient ? `Selected ingredient: ${ITEMS[craftIngredient].name}` : 'No ingredient selected';
+}
+function addDurability(element, id) {
+  const durability = game.getDurability?.(id);
+  if (!durability || durability.current >= durability.max) return;
+  const bar = document.createElement('span'); bar.className = 'durability-bar';
+  const remaining = Math.max(0, durability.current / durability.max);
+  bar.style.width = `${remaining * 82}%`; bar.style.backgroundColor = `hsl(${remaining * 110} 85% 45%)`;
+  bar.setAttribute('aria-label', `${durability.current} of ${durability.max} durability`); element.append(bar);
+}
 function renderInventory() {
   const grid = $('#inventory-grid'); grid.replaceChildren();
   const entries = Object.entries(game.inventory).filter(([id, count]) => ITEMS[id] && count > 0);
-  $('#inventory-count').textContent = `${entries.length} ITEMS`;
+  $('#inventory-count').textContent = `${entries.length} ITEM TYPES`;
   for (const [id, count] of entries) {
     const button = document.createElement('button');
-    button.className = `inventory-item${game.hotbar[game.selected] === id ? ' active' : ''}`; button.dataset.item = id;
-    button.title = `${ITEMS[id].name} · ${count} · Equip in slot ${game.selected + 1}`; button.setAttribute('aria-label', button.title);
+    button.className = `inventory-item${craftIngredient === id ? ' active' : ''}`; button.dataset.item = id;
+    const durability = game.getDurability?.(id);
+    button.title = `${ITEMS[id].name} · ${count}${durability ? ` · ${durability.current}/${durability.max} durability` : ''} · Equip / select ingredient`; button.setAttribute('aria-label', button.title);
     const n = document.createElement('span'); n.textContent = game.mode === 'creative' ? '∞' : count;
-    button.append(makeIcon(id), n);
-    button.addEventListener('click', () => { game.assignHotbar(game.selected, id); renderInventory(); updateUi(true); sound(); toast(`${ITEMS[id].name} equipped in slot ${game.selected + 1}`); });
+    button.append(makeIcon(id), n); addDurability(button, id);
+    button.addEventListener('click', () => { game.assignHotbar(game.selected, id); craftIngredient = id; renderInventory(); updateUi(true); sound(); });
     grid.append(button);
   }
-  if (!entries.length) grid.innerHTML = '<p class="empty-inventory">A backpack full of possibility.<br>Gather some wood to get started.</p>';
-  const missingSlots = Math.max(0, 15 - entries.length);
+  if (!entries.length) grid.innerHTML = '<p class="empty-inventory">Your inventory is empty.<br>Punch a tree to collect your first wood.</p>';
+  const missingSlots = Math.max(0, 27 - entries.length);
   for (let i = 0; i < missingSlots; i++) { const blank = document.createElement('div'); blank.className = 'inventory-item'; blank.setAttribute('aria-hidden', 'true'); grid.append(blank); }
   $('#station-status').replaceChildren();
   for (const [station, name] of [['workbench', 'Crafting table'], ['furnace', 'Furnace']]) {
@@ -244,7 +292,7 @@ function renderInventory() {
     $('#station-status').append(badge);
   }
   const list = $('#recipe-list'), scroll = list.scrollTop; list.replaceChildren();
-  for (const recipe of RECIPES.filter(r => category === 'all' || r.category === category)) {
+  for (const recipe of RECIPES.filter(r => r.station !== 'furnace' && (category === 'all' || r.category === category))) {
     const card = document.createElement('div'); card.className = 'recipe-card'; card.dataset.recipe = recipe.id;
     const icon = document.createElement('div'); icon.className = 'recipe-icon'; icon.append(makeIcon(recipe.output[0]));
     const details = document.createElement('div'); details.className = 'recipe-detail';
@@ -256,13 +304,82 @@ function renderInventory() {
       if ((game.inventory[id] || 0) < n && game.mode !== 'creative') span.className = 'missing'; cost.append(span);
     });
     details.append(name, cost);
-    if (recipe.station && !game.nearStation(recipe.station) && game.mode !== 'creative') { const station = document.createElement('p'); station.className = 'station-needed'; station.textContent = `Requires a nearby ${recipe.station === 'workbench' ? 'crafting table' : 'furnace'}`; details.append(station); }
-    const button = document.createElement('button'); button.className = 'craft-button'; button.textContent = 'Craft'; button.disabled = !game.canCraft(recipe.id); button.setAttribute('aria-label', `Craft ${recipe.name}`);
-    button.addEventListener('click', () => { const result = game.craft(recipe.id); if (result.ok) { if (recipe.id === 'workbench') questFlags.craft = true; sound('craft'); } toast(result.message, true); renderInventory(); updateUi(true); });
+    const fits = !!fillRecipeGrid(recipe.id, gridSize());
+    if (!fits) { const station = document.createElement('p'); station.className = 'station-needed'; station.textContent = 'Requires a nearby crafting table'; details.append(station); }
+    const button = document.createElement('button'); button.className = 'craft-button'; button.textContent = fits ? 'Fill grid' : 'Table'; button.disabled = !fits || !game.canCraft(recipe.id); button.setAttribute('aria-label', `Fill recipe for ${recipe.name}`);
+    button.addEventListener('click', () => { const pattern = fillRecipeGrid(recipe.id, gridSize()); if (pattern) { craftingGrid = pattern; renderCraftGrid(); sound(); } });
     card.append(icon, details, button); list.append(card);
   }
-  list.scrollTop = scroll;
+  list.scrollTop = scroll; renderCraftGrid();
 }
+$('#clear-grid').addEventListener('click', clearCraftingGrid);
+$('#craft-output').addEventListener('click', () => {
+  const recipe = recipeForGrid(craftingGrid, gridSize()); if (!recipe) return;
+  const result = game.craft(recipe.id);
+  if (result.ok) { if (recipe.id === 'workbench') questFlags.craft = true; craftingGrid.fill(null); sound('craft'); }
+  toast(result.message, true); renderInventory(); updateUi(true);
+});
+function renderChest() {
+  if (!activeChest) return;
+  const [x, y] = activeChest, stored = game.chests?.[`${x},${y}`] || {};
+  for (const [selector, inventory, direction] of [['#chest-storage', stored, 'withdraw'], ['#chest-backpack', game.inventory, 'deposit']]) {
+    const grid = $(selector); grid.replaceChildren();
+    for (const [id, count] of Object.entries(inventory).filter(([id, count]) => ITEMS[id] && count > 0)) {
+      const button = document.createElement('button'); button.className = 'inventory-item chest-item'; button.dataset.item = id; button.dataset.direction = direction;
+      button.setAttribute('aria-label', `${direction === 'deposit' ? 'Store' : 'Take'} ${ITEMS[id].name} (${count})`); button.title = button.getAttribute('aria-label');
+      const number = document.createElement('span'); number.textContent = count; button.append(makeIcon(id), number);
+      button.addEventListener('click', e => { const result = game.transferChest(x, y, id, e.shiftKey ? Math.min(64, count) : 1, direction); if (!result.ok) toast(result.message); else sound(); renderChest(); updateUi(true); });
+      grid.append(button);
+    }
+    for (let i = grid.children.length; i < 27; i++) { const blank = document.createElement('div'); blank.className = 'inventory-item'; blank.setAttribute('aria-hidden', 'true'); grid.append(blank); }
+  }
+}
+function renderFurnace() {
+  if (!activeFurnace) return;
+  const [x, y] = activeFurnace, job = game.furnaces?.[`${x},${y}`];
+  const signature = JSON.stringify([x, y, job ? { ...job, remaining: Math.ceil(job.remaining) } : null, game.inventory]);
+  if (signature === lastFurnaceUi) return; lastFurnaceUi = signature;
+  const status = $('#furnace-status'); status.replaceChildren();
+  if (job?.output) {
+    const button = document.createElement('button'); button.className = 'craft-output'; button.id = 'collect-furnace'; button.setAttribute('aria-label', `Collect ${ITEMS[job.output[0]].name}`);
+    button.append(makeIcon(job.output[0])); button.addEventListener('click', () => { const r = game.collectFurnace(x, y); toast(r.message, true); sound('craft'); renderFurnace(); updateUi(true); });
+    const label = document.createElement('p'); label.textContent = 'Ready! Take the finished item.'; status.append(button, label);
+  } else if (job && job.remaining > 0) {
+    const progress = document.createElement('progress'); progress.max = 10; progress.value = 10 - job.remaining;
+    const label = document.createElement('p'); label.textContent = `Smelting… ${Math.ceil(job.remaining)}s`; status.append(progress, label);
+  } else status.textContent = 'Add ingredients and coal to begin.';
+  const list = $('#furnace-recipes'); list.replaceChildren();
+  for (const recipe of RECIPES.filter(r => r.station === 'furnace')) {
+    const row = document.createElement('div'); row.className = 'recipe-card'; row.dataset.recipe = recipe.id;
+    const icon = document.createElement('div'); icon.className = 'recipe-icon'; icon.append(makeIcon(recipe.output[0]));
+    const detail = document.createElement('div'); detail.className = 'recipe-detail';
+    const name = document.createElement('strong'); name.textContent = recipe.name;
+    const cost = document.createElement('p'); cost.textContent = Object.entries(recipe.cost).map(([id, count]) => `${count} ${ITEMS[id].name}`).join(' + '); detail.append(name, cost);
+    const button = document.createElement('button'); button.className = 'craft-button'; button.textContent = 'Smelt'; button.disabled = !!job || !game.canCraft(recipe.id); button.setAttribute('aria-label', recipe.name);
+    button.addEventListener('click', () => { const r = game.startSmelt(x, y, recipe.id); toast(r.message, true); renderFurnace(); updateUi(true); });
+    row.append(icon, detail, button); list.append(row);
+  }
+}
+function interactiveBlocks() { return [BLOCKS.WORKBENCH, BLOCKS.FURNACE, BLOCKS.CHEST, BLOCKS.BED, BLOCKS.BED_HEAD, BLOCKS.DOOR_BOTTOM, BLOCKS.DOOR_TOP, BLOCKS.DOOR_OPEN_BOTTOM, BLOCKS.DOOR_OPEN_TOP].filter(Number.isInteger); }
+function findUseTarget() {
+  const p = game.player, blocks = interactiveBlocks();
+  if (pointer.active && target && Math.hypot(target.x - p.x, target.y - p.y) <= 5 && blocks.includes(game.get(target.x, target.y))) return { x: Math.floor(target.x), y: Math.floor(target.y) };
+  const candidates = [];
+  for (let y = Math.floor(p.y - 2); y < p.y + 4; y++) for (let x = Math.floor(p.x - 3); x < p.x + 4; x++) if (blocks.includes(game.get(x, y))) { const distance = Math.hypot(x + .5 - p.x - p.w / 2, y + .5 - p.y - p.h / 2); if (distance <= 3) candidates.push({ x, y, distance }); }
+  candidates.sort((a, b) => a.distance - b.distance); return candidates[0] || null;
+}
+function handleInteraction(x, y) {
+  const r = game.interact?.(x, y); if (!r) return false;
+  if (r.ok) {
+    pointer.interacted = true;
+    if (r.action === 'chest') { activeChest = [r.x ?? x, r.y ?? y]; openModal('chest-modal'); }
+    else if (r.action === 'crafting') { openModal('inventory-modal'); }
+    else if (r.action === 'furnace') { activeFurnace = [r.x ?? x, r.y ?? y]; openModal('furnace-modal'); }
+    else { toast(r.message, true); sound(); updateUi(true); }
+  } else toast(r.message);
+  return r.ok;
+}
+
 for (const tab of $$('#craft-tabs button')) tab.addEventListener('click', () => { category = tab.dataset.category; for (const t of $$('#craft-tabs button')) t.classList.toggle('active', t === tab); renderInventory(); });
 
 function preciseWorldPoint(x, y) { const rect = canvas.getBoundingClientRect(); return { x: (x - rect.left) / renderer.tile + renderer.camera.x, y: (y - rect.top) / renderer.tile + renderer.camera.y }; }
@@ -274,13 +391,17 @@ canvas.addEventListener('pointerdown', e => {
   if (!playing || activeModal() || game.dead) return;
   e.preventDefault(); focusGame(); point(e);
   try { canvas.setPointerCapture(e.pointerId); } catch { /* Older browsers. */ }
-  pointer.down = true; pointer.build = e.button === 2 || e.pointerType === 'touch' && touchBuild; placeClock = 0;
+  pointer.down = true; pointer.interacted = false; pointer.build = e.button === 2 || e.pointerType === 'touch' && touchBuild; placeClock = 0;
   if (pointer.build) placeAtTarget(); else mineOrAttack(0);
 });
 canvas.addEventListener('pointerup', e => { pointer.down = false; pointer.build = false; game.cancelMining(); if (e.pointerType === 'touch') pointer.active = false; });
 canvas.addEventListener('pointercancel', () => { pointer.down = false; pointer.build = false; game.cancelMining(); });
 function placeAtTarget() {
-  if (!target) return;
+  if (!target || pointer.interacted) return;
+  const x = Math.floor(target.x), y = Math.floor(target.y), block = game.get(x, y), selected = ITEMS[game.hotbar[game.selected]];
+  if (!held.sprint && (interactiveBlocks().includes(block) || selected?.kind === 'hoe' || game.hotbar[game.selected] === 'seeds')) {
+    handleInteraction(x, y); pointer.interacted = true; placeClock = .22; return;
+  }
   const result = game.place(Math.floor(target.x), Math.floor(target.y));
   if (result.ok) { sound('place'); updateUi(true); } else toast(result.message);
   placeClock = .22;
@@ -291,7 +412,7 @@ function mineOrAttack(dt) {
   if (mob) { const result = game.attack(target.x, target.y); if (result.ok) { sound('hurt'); if (result.message?.startsWith('+')) toast(result.message); } game.cancelMining(); return; }
   if (dt <= 0) return;
   const result = game.mine(Math.floor(target.x), Math.floor(target.y), dt);
-  if (result.broken) { sound('mine'); updateUi(true); if (result.item) toast(`+1 ${ITEMS[result.item]?.name || result.item}`); }
+  if (result.broken) { sound('mine'); updateUi(true); if (result.toolBroke) toast(game.message, true); else if (result.item) toast(`+1 ${ITEMS[result.item]?.name || result.item}`); }
   else if (!result.ok && result.message && game.get(Math.floor(target.x), Math.floor(target.y)) !== BLOCKS.AIR) toast(result.message);
 }
 canvas.addEventListener('wheel', e => { if (!playing || activeModal()) return; e.preventDefault(); game.select((game.selected + (e.deltaY > 0 ? 1 : 8)) % 9); game.cancelMining(); updateUi(true); }, { passive: false });
@@ -308,6 +429,7 @@ window.addEventListener('keydown', e => {
   if (activeModal()) return;
   if (keyMap[e.code]) { e.preventDefault(); held[keyMap[e.code]] = true; }
   if (/^Digit[1-9]$/.test(e.code)) { e.preventDefault(); game.select(Number(e.code.slice(-1)) - 1); game.cancelMining(); updateUi(true); }
+  if (e.code === 'KeyF' && !e.repeat) { e.preventDefault(); const use = findUseTarget(); if (use) handleInteraction(use.x, use.y); else if (target) handleInteraction(Math.floor(target.x), Math.floor(target.y)); else toast('Move next to a crafting table, door, bed, chest, or furnace.'); }
   if (e.code === 'KeyQ' && !e.repeat) { e.preventDefault(); const r = game.useSelected(); toast(r.message, true); if (r.ok) sound('eat'); updateUi(true); }
 });
 window.addEventListener('keyup', e => { if (keyMap[e.code]) held[keyMap[e.code]] = false; });
@@ -319,28 +441,36 @@ for (const button of $$('.touch-move button')) {
   const release = e => { e.preventDefault(); held[button.dataset.key] = false; };
   button.addEventListener('pointerup', release); button.addEventListener('pointercancel', release); button.addEventListener('lostpointercapture', release);
 }
-$('#touch-mode').addEventListener('click', () => { touchBuild = !touchBuild; $('#touch-mode').textContent = touchBuild ? '▦ Build' : '⛏ Mine'; $('#touch-mode').setAttribute('aria-label', touchBuild ? 'Build mode. Tap to switch to mining.' : 'Mine mode. Tap to switch to building.'); sound(); });
+$('#touch-mode').addEventListener('click', () => { touchBuild = !touchBuild; $('#touch-mode').textContent = touchBuild ? '▦ Build/use' : '⛏ Mine'; $('#touch-mode').setAttribute('aria-label', touchBuild ? 'Build mode. Tap to switch to mining.' : 'Mine mode. Tap to switch to building.'); sound(); });
 $('#touch-mode').setAttribute('aria-label', 'Mine mode. Tap to switch to building.');
 window.addEventListener('resize', () => renderer.resize());
 renderer.resize();
 
 function frame(timestamp) {
   const dt = Math.min(.05, Math.max(0, (timestamp - (lastFrame || timestamp)) / 1000)); lastFrame = timestamp;
-  const paused = !playing || !!activeModal() || document.hidden || game.dead;
+  const paused = !playing || $('#pause-modal').open || $('#help-modal').open || document.hidden || game.dead;
+  const controlsActive = !paused && !activeModal();
   if (!paused) {
     const oldHealth = game.player.health;
-    game.step(dt, held);
+    game.step(dt, controlsActive ? held : {});
     if (game.player.health < oldHealth) sound('hurt');
-    if (pointer.active) target = preciseWorldPoint(pointer.x, pointer.y);
+    if (pointer.active && controlsActive) target = preciseWorldPoint(pointer.x, pointer.y);
     placeClock -= dt;
-    if (pointer.down) { if (pointer.build) { if (placeClock <= 0) placeAtTarget(); } else mineOrAttack(dt); }
+    if (pointer.down && controlsActive) { if (pointer.build) { if (placeClock <= 0) placeAtTarget(); } else mineOrAttack(dt); }
     else game.cancelMining();
     saveClock += dt;
     if (saveClock >= 20) { saveClock = 0; saveWorld(false); }
   }
-  renderer.render(game, dt, { target: pointer.active && playing && !paused && target ? { x: Math.floor(target.x), y: Math.floor(target.y) } : null, showTarget: pointer.active && playing && !paused });
+  renderer.render(game, dt, { target: pointer.active && playing && controlsActive && target ? { x: Math.floor(target.x), y: Math.floor(target.y) } : null, showTarget: pointer.active && playing && controlsActive });
   uiClock += dt;
-  if (uiClock >= .15) { uiClock = 0; updateUi(); }
+  if (uiClock >= .15) {
+    uiClock = 0; updateUi();
+    if ($('#furnace-modal').open) renderFurnace();
+    if (playing && controlsActive) {
+      const use = findUseTarget(); $('#interaction-hint').hidden = !use;
+      if (use) { const id = game.get(use.x, use.y); const label = id === BLOCKS.CHEST ? 'Open chest' : id === BLOCKS.FURNACE ? 'Use furnace' : [BLOCKS.BED, BLOCKS.BED_HEAD].includes(id) ? 'Use bed' : id === BLOCKS.WORKBENCH ? 'Crafting table' : 'Toggle door'; $('#interaction-hint').textContent = `F · ${label}`; }
+    } else $('#interaction-hint').hidden = true;
+  }
   requestAnimationFrame(frame);
 }
 requestAnimationFrame(frame);

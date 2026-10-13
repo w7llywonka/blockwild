@@ -3,6 +3,7 @@ import { access, mkdir, readFile } from 'node:fs/promises';
 import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
+import { runUpgradeChecks } from './upgrade-checks.mjs';
 
 const projectRoot = fileURLToPath(new URL('..', import.meta.url));
 const output = path.join(projectRoot, 'test-results');
@@ -23,7 +24,7 @@ const server = process.env.BASE_URL ? null : spawn('python3', [
 async function waitForServer() {
   for (let attempt = 0; attempt < 50; attempt++) {
     try {
-      if ((await fetch(baseURL)).ok) return;
+      if ((await fetch(baseURL, { signal: AbortSignal.timeout(2000) })).ok) return;
     } catch { /* Wait for the local test server. */ }
     await new Promise(resolve => setTimeout(resolve, 100));
   }
@@ -44,12 +45,22 @@ const check = (name, value, message = name) => {
 };
 let browser;
 try {
-  await waitForServer();
-  browser = await playwright.chromium.launch({ executablePath, headless: true, args: ['--no-sandbox', '--disable-dev-shm-usage'] });
+  // Remote deployments are tested by Chromium itself; Node's HTTP client may
+  // not share the browser's outbound proxy configuration.
+  if (server) await waitForServer();
+  const remote = !['localhost', '127.0.0.1', '[::1]'].includes(new URL(baseURL).hostname);
+  const proxyValue = remote && (process.env.HTTPS_PROXY || process.env.HTTP_PROXY);
+  const proxyURL = proxyValue ? new URL(proxyValue) : null;
+  const proxy = proxyURL ? {
+    server: `${proxyURL.protocol}//${proxyURL.host}`,
+    ...(proxyURL.username ? { username: decodeURIComponent(proxyURL.username), password: decodeURIComponent(proxyURL.password) } : {}),
+  } : undefined;
+  browser = await playwright.chromium.launch({ executablePath, headless: true, proxy, args: ['--no-sandbox', '--disable-dev-shm-usage'] });
   const context = await browser.newContext({ viewport: { width: 1440, height: 900 } });
   const page = await context.newPage();
   page.on('pageerror', error => errors.push(error.message));
   await page.goto(baseURL, { waitUntil: 'networkidle' });
+  console.log(`Page: ${await page.title()} (${page.url()})`);
   await page.locator('#play-button').waitFor({ state: 'visible' });
   check('Landing screen is visible', await page.locator('#play-button').isVisible());
   await page.screenshot({ path: path.join(output, 'desktop-landing.png'), fullPage: true });
@@ -59,6 +70,7 @@ try {
   await page.locator('#intro').waitFor({ state: 'hidden' });
   await page.waitForFunction(() => window.__blockwild?.game?.player.grounded);
   const initial = await page.evaluate(() => ({ ...window.__blockwild.game.player }));
+  check('Survival starts with an empty inventory', await page.evaluate(() => Object.values(window.__blockwild.game.inventory).every(count => count === 0)));
   await page.keyboard.down('d');
   await page.waitForTimeout(350);
   await page.keyboard.up('d');
@@ -123,6 +135,7 @@ try {
   const craft = async id => {
     const button = page.locator(`.recipe-card[data-recipe="${id}"] button`);
     await button.click();
+    await page.locator('#craft-output').click();
   };
   for (let i = 0; i < 3; i++) await craft('planks');
   await craft('stick');
@@ -236,7 +249,8 @@ try {
   const combatBackup = structuredClone(backup);
   const zombieX = Math.floor(combatBackup.world.player.x) + 1.4;
   combatBackup.world.time = .75;
-  combatBackup.world.player.hunger = 15;
+  combatBackup.world.player.hunger = 16;
+  combatBackup.world.inventory.apple = 3;
   combatBackup.world.mobs = [{ id: 999, type: 'zombie', x: zombieX,
     y: combatBackup.world.surface[Math.floor(zombieX)] - 1.75,
     w: .65, h: 1.75, vx: 0, vy: 0, health: 12, facing: -1,
@@ -256,6 +270,7 @@ try {
   await creative.keyboard.press('6');
   await creative.keyboard.press('q');
   check('Eating restores hunger and consumes an apple', await creative.evaluate(() => window.__blockwild.game.player.hunger === 20 && window.__blockwild.game.inventory.apple === 2));
+  await runUpgradeChecks({ page: creative, template: backup, check, output });
   await creativeContext.close();
 
   check('No uncaught browser errors', errors.length === 0, errors.join('\n'));
